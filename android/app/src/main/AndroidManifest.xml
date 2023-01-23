@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.task_scheduler">
    <application
-        android:label="task_scheduler"
+        android:label="Task Scheduler"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

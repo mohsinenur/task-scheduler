@@ -1,6 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:sqflite/sqflite.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,22 +14,87 @@ class _HomePageState extends State<HomePage> {
   final _taskController = TextEditingController();
   final _timeController = TextEditingController();
 
+  List<Task> _tasks = [];
 
-  final List<Task> _tasks = [
-    Task(title: 'Meeting with John', time: '9:00 AM'),
-    Task(title: 'Grocery Shopping', time: '12:00 PM'),
-    Task(title: 'Call Mom', time: '3:00 PM'),
-  ];
-
-  Future<void> initializeDatabase() async {
-    var directory = await getApplicationDocumentsDirectory();
-    var dbPath = '${directory.path}/tasks.db';
-    Database db = await openDatabase(dbPath, version: 1, onCreate: _onCreate);
+  @override
+  void initState() {
+    super.initState();
+    _getTasks();
   }
 
-  void _onCreate(Database db, int version) async {
-      await db.execute(
-          'CREATE TABLE tasks (id INTEGER PRIMARY KEY, title TEXT, time TEXT)');
+  Future<void> _saveTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final tasksJson = json.encode(_tasks);
+    prefs.setString('tasks', tasksJson);
+  }
+
+  Future<void> _getTasks() async {
+    final prefs = await SharedPreferences.getInstance();
+    final tasksJson = prefs.getString('tasks');
+    if (tasksJson != null) {
+      final tasks = json.decode(tasksJson) as List;
+      setState(() {
+        _tasks = tasks.map((task) => Task.fromJson(task)).toList();
+      });
+    }
+  }
+
+  void _deleteTask(int index) {
+    setState(() {
+      _tasks.removeAt(index);
+    });
+    _saveTasks();
+  }
+
+  void addTaskButton() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Add Task'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextField(
+                controller: _taskController,
+                decoration: const InputDecoration(hintText: 'Task Title'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _timeController,
+                decoration: const InputDecoration(hintText: 'Task Time'),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            OutlinedButton(
+              child: const Text('Save'),
+              onPressed: () async {
+                if (_taskController.text.isNotEmpty &&
+                    _timeController.text.isNotEmpty) {
+                  setState(() {
+                    _tasks.add(Task(
+                      title: _taskController.text,
+                      time: _timeController.text,
+                    ));
+                  });
+                  _saveTasks();
+                  _taskController.clear();
+                  _timeController.clear();
+                }
+                Navigator.of(context).pop();
+              },
+            ),
+            OutlinedButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -36,6 +102,17 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Task Scheduler'),
+        actions: <Widget>[
+          GestureDetector(
+            onTap: () {
+              addTaskButton();
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Icon(Icons.add),
+            ),
+          ),
+        ],
       ),
       body: Column(
         children: <Widget>[
@@ -46,76 +123,13 @@ class _HomePageState extends State<HomePage> {
                 return TaskCard(
                   taskTitle: _tasks[index].title,
                   taskTime: _tasks[index].time,
+                  index: index,
+                  deleteTask: _deleteTask,
                 );
               },
             ),
           ),
-          addTaskButton(),
         ],
-      ),
-    );
-  }
-
-  Widget addTaskButton() {
-    return Container(
-      alignment: Alignment.center,
-      child: OutlinedButton(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) {
-              return AlertDialog(
-                title: const Text('Add Task'),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: <Widget>[
-                    TextField(
-                      controller: _taskController,
-                      decoration: const InputDecoration(hintText: 'Task Title'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _timeController,
-                      decoration: const InputDecoration(hintText: 'Task Time'),
-                    ),
-                  ],
-                ),
-                actions: <Widget>[
-                  OutlinedButton(
-                    child: const Text('Save'),
-                    onPressed: () {
-                      if (_taskController.text.isNotEmpty &&
-                          _timeController.text.isNotEmpty) {
-                        setState(() {
-                          _tasks.add(Task(
-                            title: _taskController.text,
-                            time: _timeController.text,
-                          ));
-                        });
-                        _taskController.clear();
-                        _timeController.clear();
-                      }
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                  OutlinedButton(
-                    child: const Text('Cancel'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                  ),
-                ],
-              );
-            },
-          );
-        },
-        child: const Text(
-          'Add Task',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-          ),
-        ),
       ),
     );
   }
@@ -126,13 +140,32 @@ class Task {
   final String time;
 
   Task({required this.title, required this.time});
+
+  factory Task.fromJson(Map<String, dynamic> json) {
+    return Task(
+      title: json['title'] as String,
+      time: json['time'] as String,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'time': time,
+      };
 }
 
 class TaskCard extends StatelessWidget {
   final String taskTitle;
   final String taskTime;
+  final int index;
+  final Function deleteTask;
 
-  const TaskCard({super.key, required this.taskTitle, required this.taskTime});
+  const TaskCard(
+      {super.key,
+      required this.taskTitle,
+      required this.taskTime,
+      required this.index,
+      required this.deleteTask});
 
   @override
   Widget build(BuildContext context) {
@@ -150,27 +183,13 @@ class TaskCard extends StatelessWidget {
         ],
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            taskTitle,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(
-            height: 8,
-          ),
-          Text(
-            taskTime,
-            style: const TextStyle(
-              color: Colors.black54,
-              fontSize: 14,
-            ),
-          ),
-        ],
+      child: ListTile(
+        title: Text(taskTitle),
+        subtitle: Text(taskTime),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete),
+          onPressed: () => deleteTask(index),
+        ),
       ),
     );
   }
