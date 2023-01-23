@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -72,12 +73,17 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 if (_taskController.text.isNotEmpty &&
                     _timeController.text.isNotEmpty) {
-                  setState(() {
-                    _tasks.add(Task(
-                      title: _taskController.text,
-                      time: _timeController.text,
-                    ));
-                  });
+                  setState(
+                    () {
+                      _tasks.add(
+                        Task(
+                          title: _taskController.text,
+                          time: _timeController.text,
+                            dateTime: DateFormat.yMd().add_jm().format(DateTime.now()),
+                        ),
+                      );
+                    },
+                  );
                   _saveTasks();
                   _taskController.clear();
                   _timeController.clear();
@@ -123,6 +129,7 @@ class _HomePageState extends State<HomePage> {
                 return TaskCard(
                   taskTitle: _tasks[index].title,
                   taskTime: _tasks[index].time,
+                  dateTime: _tasks[index].dateTime,
                   index: index,
                   deleteTask: _deleteTask,
                 );
@@ -138,13 +145,15 @@ class _HomePageState extends State<HomePage> {
 class Task {
   final String title;
   final String time;
+  final String dateTime;
 
-  Task({required this.title, required this.time});
+  Task({required this.title, required this.time, required this.dateTime});
 
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
       title: json['title'] as String,
       time: json['time'] as String,
+      dateTime: json['dateTime'] as String,
     );
   }
 
@@ -157,15 +166,18 @@ class Task {
 class TaskCard extends StatelessWidget {
   final String taskTitle;
   final String taskTime;
+  final String dateTime;
   final int index;
   final Function deleteTask;
 
-  const TaskCard(
-      {super.key,
-      required this.taskTitle,
-      required this.taskTime,
-      required this.index,
-      required this.deleteTask});
+  const TaskCard({
+    super.key,
+    required this.taskTitle,
+    required this.taskTime,
+    required this.dateTime,
+    required this.index,
+    required this.deleteTask,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -185,7 +197,9 @@ class TaskCard extends StatelessWidget {
       ),
       child: ListTile(
         title: Text(taskTitle),
-        subtitle: Text(taskTime),
+        subtitle: Column(
+          children: <Widget>[Text(dateTime), Text(taskTime)],
+        ),
         trailing: IconButton(
           icon: const Icon(Icons.delete),
           onPressed: () => deleteTask(index),
